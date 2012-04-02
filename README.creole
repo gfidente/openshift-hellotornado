@@ -1,10 +1,47 @@
 == Tornado on OpenShift ==
 
-This article describes how to deploy a Tornado WSGI application on OpenShift.
+This article describes how to deploy a Tornado web application on OpenShift. It has been updated to leverage the [[https://www.redhat.com/openshift/community/blogs/new-openshift-release-march-22-2012-nodejs-diy-cartridge-new-website-and-more|DIY cartridge]] introduced in late March.
 
-Tornado is an open source version of the scalable, non-blocking web server and tools that power FriendFeed, here is how the typical 'hello world' looks like on it:
+Tornado is an open source version of the scalable, non-blocking web server and tools that power FriendFeed. We will deploy Tornado in a custom tailored virtualenv.
+
+To create our new app on OpenShift:
 
 {{{
+
+$ rhc-create-app -a hellotornado -t diy-0.1
+$ cd hellotornado
+
+}}}
+
+Now let's create the virtualenv (and don't forget to run this step on a python2.6 system, as that is the version of python hosted on OpenShift):
+
+{{
+
+virtualenv --no-site-packages misc/virtenv
+
+}}
+
+Activate your virtualenv and install the needed modules:
+
+{{
+
+source misc/virtenv/bin/activate
+pip install tornado
+pip install pycurl
+
+}}
+
+Now create your diy/hellotornado.py file (and feel free to remove the diy/index.html file if you like):
+
+{{{
+
+#!/usr/bin/env python
+import os
+
+here = os.path.dirname(os.path.abspath(__file__))
+os.environ['PYTHON_EGG_CACHE'] = os.path.join(here, '..', 'misc/virtenv/lib/python2.6/site-packages')
+virtualenv = os.path.join(here, '..', 'misc/virtenv/bin/activate_this.py')
+execfile(virtualenv, dict(__file__=virtualenv))
 
 import tornado.ioloop
 import tornado.web
@@ -18,126 +55,43 @@ application = tornado.web.Application([
 ])
 
 if __name__ == "__main__":
-    application.listen(8888)
+    address = os.environ['OPENSHIFT_INTERNAL_IP']
+    application.listen(8080, address=address)
     tornado.ioloop.IOLoop.instance().start()
 
 }}}
 
-In the example above the app is spawned within a standalone web server, but you can make it to work as a WSGI instance, which is what we will need to do.
-
-First, let's create our new app on OpenShift:
+Now let's create the start/stop files (these are only some examples to start with):
 
 {{{
 
-$ rhc-create-app -a hellotornado -t python-2.6
-$ cd hellotornado
+$ more .openshift/action_hooks/start 
+#!/bin/bash
+# The logic to start up your application should be put in this
+# script. The application will work only if it binds to
+# $OPENSHIFT_INTERNAL_IP:8080
+nohup ${OPENSHIFT_REPO_DIR}/diy/hellotornado.py > ${OPENSHIFT_LOG_DIR}/hellotornado.log 2>&1 &
+
+$ more .openshift/action_hooks/stop 
+#!/bin/bash
+# The logic to stop your application should be put in this script.
+kill `ps -ef | grep hellotornado | grep -v grep | awk '{ print $2 }'` > /dev/null 2>&1
+exit 0
 
 }}}
 
-Tornado is not installed globally on OpenShift, we will add it as a requirement for our application egg.
-
-Edit the 'setup.py' file, fill in your details and uncomment the 'install_requires' directive as follows:
-
-{{{
-
-install_requires=["tornado>=2.2"]
-
-}}}
-
-One could also add any further pythonic requirements here. For our test purposes the app is very simple, we just need Tornado. The setup.py file will look like this:
-
-{{{
-
-from setuptools import setup
-
-setup(name='YourAppName',
-    version='1.0',
-    description='OpenShift App',
-    author='Your Name',
-    author_email='example@example.com',
-    url='http://www.python.org/sigs/distutils-sig/',
-    install_requires=['tornado>=2.2'],
-   )
-
-}}}
-
-Now edit the wsgi/application file, remove the example code and populate it with your app code, as follows:
-
-{{{
-
-#!/usr/bin/python                                           
-import os
-
-virtenv = os.environ['APPDIR'] + '/virtenv/'
-os.environ['PYTHON_EGG_CACHE'] = os.path.join(virtenv, 'lib/python2.6/site-packages')
-virtualenv = os.path.join(virtenv, 'bin/activate_this.py')
-try:
-    execfile(virtualenv, dict(__file__=virtualenv))
-except IOError:
-    pass
-#
-# IMPORTANT: Put any additional includes below this line.  If placed above this
-# line, it's possible required libraries won't be in your searchable path
-#
-
-import tornado.wsgi
-import tornado.web
-
-class MainHandler(tornado.web.RequestHandler):
-    def get(self):
-        self.write("Hello, world")
-
-application = tornado.wsgi.WSGIApplication([
-    (r"/", MainHandler),
-])
-
-#
-# Below for testing only                            
-#                                                 
-if __name__ == '__main__':
-    from wsgiref.simple_server import make_server
-    httpd = make_server('localhost', 8051, application)
-    # Wait for a single request, serve it and quit.
-    httpd.handle_request()
-
-}}}
-
-We kept untouched the header, up and including to the virtualenv execution and the footer from the pre-existing file.
-
-We replaced instead the example application code with our own. Compared to the initial 'hello world' example, the app has been slightly modified to be instantiated as a WSGI. More details on this topic are on the official Tornado documentation at: [[http://www.tornadoweb.org/documentation/wsgi.html]]
-
-Now commit and push your project:
+Finally, commit and push your project:
  
 {{{
 
 git add .
-git commit -m "Initial commit"
+git commit -a -m "Initial commit"
 git push
 
 }}}
 
 Go at http://hellotornado-$YOURDOMAIN.rhcloud.com and enjoy!
 
-To run and test you application locally before committing, you need to recreate a python virtualenv similar to the one provisione by OpenShift in the cloud. This is a trivial task:
+To run and test you application locally before committing, just source the virtualenv activate locally and start with the custom made start/stop scripts.
 
-{{{
-
-$ mkdir ~/openshift
-$ vitualenv ~/openshift/virtenv
-$ source ~/openshift/virtenv/bin/activate
-$ pip install tornado
-$ echo "export APPDIR=~/openshift/" >> .bashrc
-
-}}}
-
-You can launch your app with:
-
-{{{
-
-$ python wsgi/application
-
-}}}
-
-but don't forget to source the virtenv activate file first or it won't work. virtualenv is a tool to create isolated Python environments, you can get more details about it at [[http://pypi.python.org/pypi/virtualenv]].
-
-have fun!
+Have fun!
