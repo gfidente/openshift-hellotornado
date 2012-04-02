@@ -1,8 +1,8 @@
 == Tornado on OpenShift ==
 
-This article describes how to deploy a Tornado web application on OpenShift. It has been updated to leverage the [[https://www.redhat.com/openshift/community/blogs/new-openshift-release-march-22-2012-nodejs-diy-cartridge-new-website-and-more|DIY cartridge]] introduced in late March.
+Tornado is an open source version of the scalable, non-blocking web server and tools that power FriendFeed.
 
-Tornado is an open source version of the scalable, non-blocking web server and tools that power FriendFeed. We will deploy Tornado in a custom tailored virtualenv.
+This article describes how to deploy a Tornado web application on OpenShift. It has been updated to leverage the [[https://www.redhat.com/openshift/community/blogs/new-openshift-release-march-22-2012-nodejs-diy-cartridge-new-website-and-more|DIY cartridge]] introduced in late March. We will deploy Tornado in a custom tailored virtualenv.
 
 To create our new app on OpenShift:
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
 }}}
 
-Make your binary file executable:
+Make sure your binary file is executable:
 
 {{{
 
@@ -69,7 +69,15 @@ chmod a+x diy/hellotornado.py
 
 }}}
 
-Now **delete** the diy/index.html file or you'll always get only the standard welcome page after pushing and create the start/stop files (these are only some examples to start with):
+**Delete** the diy/index.html file or you'll always get only the standard welcome page after pushing the code:
+
+{{{
+
+rm diy/index.html
+
+}}}
+
+Create the start/stop scripts (these are examples to start with):
 
 {{{
 
@@ -81,6 +89,7 @@ $ more .openshift/action_hooks/start
 nohup ${OPENSHIFT_REPO_DIR}/diy/hellotornado.py > ${OPENSHIFT_LOG_DIR}/hellotornado.log 2>&1 &
 
 }}}
+
 {{{
 
 $ more .openshift/action_hooks/stop 
