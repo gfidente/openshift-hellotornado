@@ -8,8 +8,8 @@ To create our new app on OpenShift:
 
 {{{
 
-$ rhc-create-app -a hellotornado -t diy-0.1
-$ cd hellotornado
+rhc app create -a hellotornado -t diy-0.1
+cd hellotornado
 
 }}}
 
@@ -31,7 +31,7 @@ pip install pycurl
 
 }}}
 
-Now create your diy/hellotornado.py file (and feel free to remove the diy/index.html file if you like):
+Now create your diy/hellotornado.py file:
 
 {{{
 
@@ -61,7 +61,15 @@ if __name__ == "__main__":
 
 }}}
 
-Now let's create the start/stop files (these are only some examples to start with):
+Make your binary file executable:
+
+{{{
+
+chmod a+x diy/hellotornado.py
+
+}}}
+
+Now **delete** the diy/index.html file or you'll always get only the standard welcome page after pushing and create the start/stop files (these are only some examples to start with):
 
 {{{
 
@@ -95,6 +103,6 @@ git push
 
 Go at http://hellotornado-$YOURDOMAIN.rhcloud.com and enjoy!
 
-To run and test you application locally before committing, just source the virtualenv activate locally and start with the custom made start/stop scripts.
+To run and test you application locally before committing, just source the virtualenv activate file and start with the custom made start/stop scripts.
 
 Have fun!
