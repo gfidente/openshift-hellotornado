@@ -15,21 +15,21 @@ $ cd hellotornado
 
 Now let's create the virtualenv (and don't forget to run this step on a python2.6 system, as that is the version of python hosted on OpenShift):
 
-{{
+{{{
 
 virtualenv --no-site-packages misc/virtenv
 
-}}
+}}}
 
 Activate your virtualenv and install the needed modules:
 
-{{
+{{{
 
 source misc/virtenv/bin/activate
 pip install tornado
 pip install pycurl
 
-}}
+}}}
 
 Now create your diy/hellotornado.py file (and feel free to remove the diy/index.html file if you like):
 
@@ -71,6 +71,9 @@ $ more .openshift/action_hooks/start
 # script. The application will work only if it binds to
 # $OPENSHIFT_INTERNAL_IP:8080
 nohup ${OPENSHIFT_REPO_DIR}/diy/hellotornado.py > ${OPENSHIFT_LOG_DIR}/hellotornado.log 2>&1 &
+
+}}}
+{{{
 
 $ more .openshift/action_hooks/stop 
 #!/bin/bash
