@@ -13,6 +13,15 @@ cd hellotornado
 
 }}}
 
+Add the remote github repo to the existing one with a command like:
+
+{{{
+
+git remote add upstream git://github.com/giulivo/openshift-hellotornado.git
+git pull -X theirs upstream master
+
+}}}
+
 Now let's create the virtualenv (and don't forget to run this step on a python2.6 system, as that is the version of python hosted on OpenShift):
 
 {{{
