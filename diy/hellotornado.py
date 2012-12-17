@@ -18,6 +18,6 @@ application = tornado.web.Application([
 ])
 
 if __name__ == "__main__":
-    address = os.environ['OPENSHIFT_INTERNAL_IP']
+    address = os.environ['OPENSHIFT_DIY_IP']
     application.listen(8080, address=address)
     tornado.ioloop.IOLoop.instance().start()
