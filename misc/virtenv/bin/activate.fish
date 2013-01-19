@@ -27,7 +27,7 @@ end
 # unset irrelavent variables
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/home/devel/github/diytornado/misc/virtenv"
+set -gx VIRTUAL_ENV "/home/devel/github.com/openshift-hellotornado/misc/virtenv"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH
