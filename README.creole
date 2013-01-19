@@ -13,12 +13,20 @@ cd hellotornado
 
 }}}
 
-And then add the github repo to the existing one with a command like:
+Add the github repo to the existing one and merge with a command like:
 
 {{{
 
 git remote add upstream git://github.com/giulivo/openshift-hellotornado.git
 git pull -X theirs upstream master
+
+}}}
+
+Push the changes OpenShift:
+
+{{{
+
+git push
 
 }}}
 
