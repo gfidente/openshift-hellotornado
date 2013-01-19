@@ -13,7 +13,7 @@ cd hellotornado
 
 }}}
 
-Add the remote github repo to the existing one with a command like:
+And then add the github repo to the existing one with a command like:
 
 {{{
 
@@ -22,7 +22,11 @@ git pull -X theirs upstream master
 
 }}}
 
-Now let's create the virtualenv (and don't forget to run this step on a python2.6 system, as that is the version of python hosted on OpenShift):
+Go at http://hellotornado-$YOURDOMAIN.rhcloud.com and enjoy!
+
+=== What it does ===
+
+You can achieve the same by doing the following steps manually. Create a virtualenv in `misc/` (and don't forget to create this on a python2.6 system, as that is the version of python hosted on OpenShift):
 
 {{{
 
@@ -78,7 +82,7 @@ chmod a+x diy/hellotornado.py
 
 }}}
 
-**Delete** the diy/index.html file or you'll always get only the standard welcome page after pushing the code:
+**Delete** the `diy/index.html` file or you'll always get only the standard welcome page after pushing the code:
 
 {{{
 
@@ -118,8 +122,6 @@ git commit -a -m "Initial commit"
 git push
 
 }}}
-
-Go at http://hellotornado-$YOURDOMAIN.rhcloud.com and enjoy!
 
 To run and test you application locally before committing, just source the virtualenv activate file and start with the custom made start/stop scripts.
 
