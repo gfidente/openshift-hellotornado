@@ -1,118 +1,220 @@
-from __future__ import absolute_import, division, with_statement
-import contextlib
-import logging
+from __future__ import absolute_import, division, print_function, with_statement
+
+import datetime
 import os
-import re
-import tempfile
-import unittest
-import warnings
+import sys
 
-from tornado.escape import utf8
-from tornado.options import _Options, _LogFormatter
-from tornado.util import b, bytes_type
+from tornado.options import OptionParser, Error
+from tornado.util import basestring_type
+from tornado.test.util import unittest
 
+try:
+    from cStringIO import StringIO  # python 2
+except ImportError:
+    from io import StringIO  # python 3
 
-@contextlib.contextmanager
-def ignore_bytes_warning():
-    if not hasattr(warnings, 'catch_warnings'):
-        # python 2.5 doesn't have catch_warnings, but it doesn't have
-        # BytesWarning either so there's nothing to catch.
-        yield
-        return
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', category=BytesWarning)
-        yield
+try:
+    from unittest import mock  # python 3.3
+except ImportError:
+    try:
+        import mock  # third-party mock package
+    except ImportError:
+        mock = None
 
 
 class OptionsTest(unittest.TestCase):
-    def setUp(self):
-        self.options = _Options()
-        define = self.options.define
-        # these are currently required
-        define("logging", default="none")
-        define("help", default=False)
-
-        define("port", default=80)
-
     def test_parse_command_line(self):
-        self.options.parse_command_line(["main.py", "--port=443"])
-        self.assertEqual(self.options.port, 443)
+        options = OptionParser()
+        options.define("port", default=80)
+        options.parse_command_line(["main.py", "--port=443"])
+        self.assertEqual(options.port, 443)
 
+    def test_parse_config_file(self):
+        options = OptionParser()
+        options.define("port", default=80)
+        options.parse_config_file(os.path.join(os.path.dirname(__file__),
+                                               "options_test.cfg"))
+        self.assertEquals(options.port, 443)
 
-class LogFormatterTest(unittest.TestCase):
-    LINE_RE = re.compile(b("\x01\\[E [0-9]{6} [0-9]{2}:[0-9]{2}:[0-9]{2} options_test:[0-9]+\\]\x02 (.*)"))
+    def test_parse_callbacks(self):
+        options = OptionParser()
+        self.called = False
 
-    def setUp(self):
-        self.formatter = _LogFormatter(color=False)
-        # Fake color support.  We can't guarantee anything about the $TERM
-        # variable when the tests are run, so just patch in some values
-        # for testing.  (testing with color off fails to expose some potential
-        # encoding issues from the control characters)
-        self.formatter._colors = {
-            logging.ERROR: u"\u0001",
-            }
-        self.formatter._normal = u"\u0002"
-        self.formatter._color = True
-        # construct a Logger directly to bypass getLogger's caching
-        self.logger = logging.Logger('LogFormatterTest')
-        self.logger.propagate = False
-        self.tempdir = tempfile.mkdtemp()
-        self.filename = os.path.join(self.tempdir, 'log.out')
-        self.handler = self.make_handler(self.filename)
-        self.handler.setFormatter(self.formatter)
-        self.logger.addHandler(self.handler)
+        def callback():
+            self.called = True
+        options.add_parse_callback(callback)
 
-    def tearDown(self):
-        self.handler.close()
-        os.unlink(self.filename)
-        os.rmdir(self.tempdir)
+        # non-final parse doesn't run callbacks
+        options.parse_command_line(["main.py"], final=False)
+        self.assertFalse(self.called)
 
-    def make_handler(self, filename):
-        # Base case: default setup without explicit encoding.
-        # In python 2, supports arbitrary byte strings and unicode objects
-        # that contain only ascii.  In python 3, supports ascii-only unicode
-        # strings (but byte strings will be repr'd automatically).
-        return logging.FileHandler(filename)
+        # final parse does
+        options.parse_command_line(["main.py"])
+        self.assertTrue(self.called)
 
-    def get_output(self):
-        with open(self.filename, "rb") as f:
-            line = f.read().strip()
-            m = LogFormatterTest.LINE_RE.match(line)
-            if m:
-                return m.group(1)
-            else:
-                raise Exception("output didn't match regex: %r" % line)
+        # callbacks can be run more than once on the same options
+        # object if there are multiple final parses
+        self.called = False
+        options.parse_command_line(["main.py"])
+        self.assertTrue(self.called)
 
-    def test_basic_logging(self):
-        self.logger.error("foo")
-        self.assertEqual(self.get_output(), b("foo"))
+    def test_help(self):
+        options = OptionParser()
+        try:
+            orig_stderr = sys.stderr
+            sys.stderr = StringIO()
+            with self.assertRaises(SystemExit):
+                options.parse_command_line(["main.py", "--help"])
+            usage = sys.stderr.getvalue()
+        finally:
+            sys.stderr = orig_stderr
+        self.assertIn("Usage:", usage)
 
-    def test_bytes_logging(self):
-        with ignore_bytes_warning():
-            # This will be "\xe9" on python 2 or "b'\xe9'" on python 3
-            self.logger.error(b("\xe9"))
-            self.assertEqual(self.get_output(), utf8(repr(b("\xe9"))))
+    def test_subcommand(self):
+        base_options = OptionParser()
+        base_options.define("verbose", default=False)
+        sub_options = OptionParser()
+        sub_options.define("foo", type=str)
+        rest = base_options.parse_command_line(
+            ["main.py", "--verbose", "subcommand", "--foo=bar"])
+        self.assertEqual(rest, ["subcommand", "--foo=bar"])
+        self.assertTrue(base_options.verbose)
+        rest2 = sub_options.parse_command_line(rest)
+        self.assertEqual(rest2, [])
+        self.assertEqual(sub_options.foo, "bar")
 
-    def test_utf8_logging(self):
-        self.logger.error(u"\u00e9".encode("utf8"))
-        if issubclass(bytes_type, basestring):
-            # on python 2, utf8 byte strings (and by extension ascii byte
-            # strings) are passed through as-is.
-            self.assertEqual(self.get_output(), utf8(u"\u00e9"))
-        else:
-            # on python 3, byte strings always get repr'd even if
-            # they're ascii-only, so this degenerates into another
-            # copy of test_bytes_logging.
-            self.assertEqual(self.get_output(), utf8(repr(utf8(u"\u00e9"))))
+        # the two option sets are distinct
+        try:
+            orig_stderr = sys.stderr
+            sys.stderr = StringIO()
+            with self.assertRaises(Error):
+                sub_options.parse_command_line(["subcommand", "--verbose"])
+        finally:
+            sys.stderr = orig_stderr
 
+    def test_setattr(self):
+        options = OptionParser()
+        options.define('foo', default=1, type=int)
+        options.foo = 2
+        self.assertEqual(options.foo, 2)
 
-class UnicodeLogFormatterTest(LogFormatterTest):
-    def make_handler(self, filename):
-        # Adding an explicit encoding configuration allows non-ascii unicode
-        # strings in both python 2 and 3, without changing the behavior
-        # for byte strings.
-        return logging.FileHandler(filename, encoding="utf8")
+    def test_setattr_type_check(self):
+        # setattr requires that options be the right type and doesn't
+        # parse from string formats.
+        options = OptionParser()
+        options.define('foo', default=1, type=int)
+        with self.assertRaises(Error):
+            options.foo = '2'
 
-    def test_unicode_logging(self):
-        self.logger.error(u"\u00e9")
-        self.assertEqual(self.get_output(), utf8(u"\u00e9"))
+    def test_setattr_with_callback(self):
+        values = []
+        options = OptionParser()
+        options.define('foo', default=1, type=int, callback=values.append)
+        options.foo = 2
+        self.assertEqual(values, [2])
+
+    def _sample_options(self):
+        options = OptionParser()
+        options.define('a', default=1)
+        options.define('b', default=2)
+        return options
+
+    def test_iter(self):
+        options = self._sample_options()
+        # OptionParsers always define 'help'.
+        self.assertEqual(set(['a', 'b', 'help']), set(iter(options)))
+
+    def test_getitem(self):
+        options = self._sample_options()
+        self.assertEqual(1, options['a'])
+
+    def test_items(self):
+        options = self._sample_options()
+        # OptionParsers always define 'help'.
+        expected = [('a', 1), ('b', 2), ('help', options.help)]
+        actual = sorted(options.items())
+        self.assertEqual(expected, actual)
+
+    def test_as_dict(self):
+        options = self._sample_options()
+        expected = {'a': 1, 'b': 2, 'help': options.help}
+        self.assertEqual(expected, options.as_dict())
+
+    def test_group_dict(self):
+        options = OptionParser()
+        options.define('a', default=1)
+        options.define('b', group='b_group', default=2)
+
+        frame = sys._getframe(0)
+        this_file = frame.f_code.co_filename
+        self.assertEqual(set(['b_group', '', this_file]), options.groups())
+
+        b_group_dict = options.group_dict('b_group')
+        self.assertEqual({'b': 2}, b_group_dict)
+
+        self.assertEqual({}, options.group_dict('nonexistent'))
+
+    @unittest.skipIf(mock is None, 'mock package not present')
+    def test_mock_patch(self):
+        # ensure that our setattr hooks don't interfere with mock.patch
+        options = OptionParser()
+        options.define('foo', default=1)
+        options.parse_command_line(['main.py', '--foo=2'])
+        self.assertEqual(options.foo, 2)
+
+        with mock.patch.object(options.mockable(), 'foo', 3):
+            self.assertEqual(options.foo, 3)
+        self.assertEqual(options.foo, 2)
+
+        # Try nested patches mixed with explicit sets
+        with mock.patch.object(options.mockable(), 'foo', 4):
+            self.assertEqual(options.foo, 4)
+            options.foo = 5
+            self.assertEqual(options.foo, 5)
+            with mock.patch.object(options.mockable(), 'foo', 6):
+                self.assertEqual(options.foo, 6)
+            self.assertEqual(options.foo, 5)
+        self.assertEqual(options.foo, 2)
+
+    def test_types(self):
+        options = OptionParser()
+        options.define('str', type=str)
+        options.define('basestring', type=basestring_type)
+        options.define('int', type=int)
+        options.define('float', type=float)
+        options.define('datetime', type=datetime.datetime)
+        options.define('timedelta', type=datetime.timedelta)
+        options.parse_command_line(['main.py',
+                                    '--str=asdf',
+                                    '--basestring=qwer',
+                                    '--int=42',
+                                    '--float=1.5',
+                                    '--datetime=2013-04-28 05:16',
+                                    '--timedelta=45s'])
+        self.assertEqual(options.str, 'asdf')
+        self.assertEqual(options.basestring, 'qwer')
+        self.assertEqual(options.int, 42)
+        self.assertEqual(options.float, 1.5)
+        self.assertEqual(options.datetime,
+                         datetime.datetime(2013, 4, 28, 5, 16))
+        self.assertEqual(options.timedelta, datetime.timedelta(seconds=45))
+
+    def test_multiple_string(self):
+        options = OptionParser()
+        options.define('foo', type=str, multiple=True)
+        options.parse_command_line(['main.py', '--foo=a,b,c'])
+        self.assertEqual(options.foo, ['a', 'b', 'c'])
+
+    def test_multiple_int(self):
+        options = OptionParser()
+        options.define('foo', type=int, multiple=True)
+        options.parse_command_line(['main.py', '--foo=1,3,5:7'])
+        self.assertEqual(options.foo, [1, 3, 5, 6, 7])
+
+    def test_error_redefine(self):
+        options = OptionParser()
+        options.define('foo')
+        with self.assertRaises(Error) as cm:
+            options.define('foo')
+        self.assertRegexpMatches(str(cm.exception),
+                                 'Option.*foo.*already defined')
