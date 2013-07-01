@@ -9,15 +9,10 @@ To create our new app on OpenShift:
 {{{
 
 rhc app create hellotornado -t diy-0.1 --from-code=https://github.com/giulivo/openshift-hellotornado
-
-}}}
-Get the source from the cloud:
-{{{
-
-rhc git-clone
 cd hellotornado
-
 }}}
+
+Code from the remote repository will be automatically cloned to your current directory.
 
 Go at http://hellotornado-$YOURDOMAIN.rhcloud.com and enjoy!
 
