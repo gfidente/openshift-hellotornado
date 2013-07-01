@@ -8,27 +8,11 @@ To create our new app on OpenShift:
 
 {{{
 
-rhc app create -a hellotornado -t diy-0.1
+rhc app create hellotornado -t diy-0.1 --from-code=https://github.com/giulivo/openshift-hellotornado
 cd hellotornado
-
 }}}
 
-Add the github repo to the existing one and merge with a command like:
-
-{{{
-
-git remote add upstream git://github.com/giulivo/openshift-hellotornado.git
-git pull -X theirs upstream master
-
-}}}
-
-Push the changes OpenShift:
-
-{{{
-
-git push
-
-}}}
+Code from the remote repository will be automatically cloned to your current directory.
 
 Go at http://hellotornado-$YOURDOMAIN.rhcloud.com and enjoy!
 
